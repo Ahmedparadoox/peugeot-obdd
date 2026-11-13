@@ -25,7 +25,7 @@ jobs:
         with:
           gradle-version: '8.1.1'
 
-      - name: Build Cordova APK
+      - name: Build Cordova APK with Android 12+ Permissions
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.2"
@@ -34,11 +34,15 @@ jobs:
           cordova create app com.ahmed.peugeotmaster "PeugeotMaster"
           if [ -f "Peugeot_OBD_BSI_Master_APK_Project.zip" ]; then
             unzip -o Peugeot_OBD_BSI_Master_APK_Project.zip -d extracted/
+            cp extracted/config.xml app/config.xml
             cp -r extracted/www/* app/www/
           fi
           cd app
+          # حقن طلب إذن البلوتوث الحديث مباشرة عند الضغط على زر الاتصال
+          sed -i 's/function scanAndConnectClassicBT() {/function scanAndConnectClassicBT() { if(window.cordova \&\& cordova.plugins \&\& cordova.plugins.permissions){ const p = cordova.plugins.permissions; p.requestPermissions([p.BLUETOOTH_CONNECT, p.BLUETOOTH_SCAN, p.ACCESS_FINE_LOCATION], function(){ startBTList(); }, function(){ startBTList(); }); return; } startBTList(); } function startBTList() {/g' www/index.html
           cordova platform add android@12.0.1
           cordova plugin add cordova-plugin-bluetooth-serial
+          cordova plugin add cordova-plugin-android-permissions
           sed -i 's/compile /implementation /g' platforms/android/app/build.gradle || true
           cordova build android --debug
 
