@@ -34,30 +34,6 @@ jobs:
           cordova create app com.ahmed.peugeotmaster "PeugeotMaster"
           cd app
 
-          cat << 'EOF' > config.xml
-          <?xml version='1.0' encoding='utf-8'?>
-          <widget id="com.ahmed.peugeotmaster" version="2.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
-              <name>Peugeot OBD &amp; BSI Master</name>
-              <description>Peugeot 207 ELM327 v1.5 &amp; BSI Tool</description>
-              <author email="ahmed@peugeotmaster.dz" href="http://localhost">Ahmed</author>
-              <content src="index.html" />
-              <access origin="*" />
-              <preference name="Orientation" value="portrait" />
-              <preference name="android-minSdkVersion" value="22" />
-              <preference name="android-targetSdkVersion" value="33" />
-              <platform name="android">
-                  <config-file target="AndroidManifest.xml" parent="/*">
-                      <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-                      <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-                      <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-                      <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
-                      <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-                      <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-                  </config-file>
-              </platform>
-          </widget>
-          EOF
-
           cat << 'EOF' > www/index.html
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
@@ -225,7 +201,11 @@ jobs:
               }
               if (window.cordova && cordova.plugins && cordova.plugins.permissions) {
                 const p = cordova.plugins.permissions;
-                p.requestPermissions([p.BLUETOOTH_CONNECT, p.BLUETOOTH_SCAN, p.ACCESS_FINE_LOCATION], function() {
+                p.requestPermissions([
+                  "android.permission.BLUETOOTH_CONNECT",
+                  "android.permission.BLUETOOTH_SCAN",
+                  "android.permission.ACCESS_FINE_LOCATION"
+                ], function() {
                   listPairedDevices();
                 }, function() {
                   listPairedDevices();
@@ -242,7 +222,7 @@ jobs:
                 box.innerHTML = "";
                 box.style.display = "block";
                 if (!devices || devices.length === 0) {
-                  log("⚠️ القائمة فارغة. تأكد من تشغيل البلوتوث أو اكتب الـ MAC يدوياً.");
+                  log("⚠️ القائمة فارغة. اكتب الـ MAC يدوياً بالأسفل.");
                   return;
                 }
                 devices.forEach(d => {
@@ -284,7 +264,7 @@ jobs:
                   onConnectedSuccess(name, mac);
                 }, function(err2) {
                   setStat(false, "فشل الاتصال - تأكد من فصل تطبيق Terminal");
-                  log("❌ فشل الاتصال: " + JSON.stringify(err2) + "\nتأكد من إغلاق تطبيق Serial Bluetooth Terminal أولاً لأن القطعة تقبل تطبيقاً واحداً فقط!");
+                  log("❌ فشل الاتصال: " + JSON.stringify(err2));
                 });
               });
             }
@@ -402,6 +382,8 @@ jobs:
           cordova platform add android@12.0.1
           cordova plugin add cordova-plugin-bluetooth-serial
           cordova plugin add cordova-plugin-android-permissions
+          sed -i 's/<manifest/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/' platforms/android/app/src/main/AndroidManifest.xml || true
+          sed -i 's/<application/<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" \/><uses-permission android:name="android.permission.BLUETOOTH_SCAN" \/><application/' platforms/android/app/src/main/AndroidManifest.xml
           sed -i 's/compile /implementation /g' platforms/android/app/build.gradle || true
           cordova build android --debug
 
