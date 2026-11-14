@@ -1,4 +1,4 @@
-name: Build Peugeot Master APK
+name: Build Peugeot Master APK V2
 on: [push, workflow_dispatch]
 jobs:
   build:
@@ -25,21 +25,380 @@ jobs:
         with:
           gradle-version: '8.1.1'
 
-      - name: Build Cordova APK with Android 12+ Permissions
+      - name: Create & Build Complete Cordova APK
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.2"
           npm install -g cordova@12.0.0
           cordova telemetry off
           cordova create app com.ahmed.peugeotmaster "PeugeotMaster"
-          if [ -f "Peugeot_OBD_BSI_Master_APK_Project.zip" ]; then
-            unzip -o Peugeot_OBD_BSI_Master_APK_Project.zip -d extracted/
-            cp extracted/config.xml app/config.xml
-            cp -r extracted/www/* app/www/
-          fi
           cd app
-          # حقن طلب إذن البلوتوث الحديث مباشرة عند الضغط على زر الاتصال
-          sed -i 's/function scanAndConnectClassicBT() {/function scanAndConnectClassicBT() { if(window.cordova \&\& cordova.plugins \&\& cordova.plugins.permissions){ const p = cordova.plugins.permissions; p.requestPermissions([p.BLUETOOTH_CONNECT, p.BLUETOOTH_SCAN, p.ACCESS_FINE_LOCATION], function(){ startBTList(); }, function(){ startBTList(); }); return; } startBTList(); } function startBTList() {/g' www/index.html
+
+          cat << 'EOF' > config.xml
+          <?xml version='1.0' encoding='utf-8'?>
+          <widget id="com.ahmed.peugeotmaster" version="2.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
+              <name>Peugeot OBD &amp; BSI Master</name>
+              <description>Peugeot 207 ELM327 v1.5 &amp; BSI Tool</description>
+              <author email="ahmed@peugeotmaster.dz" href="http://localhost">Ahmed</author>
+              <content src="index.html" />
+              <access origin="*" />
+              <preference name="Orientation" value="portrait" />
+              <preference name="android-minSdkVersion" value="22" />
+              <preference name="android-targetSdkVersion" value="33" />
+              <platform name="android">
+                  <config-file target="AndroidManifest.xml" parent="/*">
+                      <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+                      <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+                      <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+                      <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+                      <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+                      <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+                  </config-file>
+              </platform>
+          </widget>
+          EOF
+
+          cat << 'EOF' > www/index.html
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <title>PEUGEOT MASTER V2</title>
+            <style>
+              :root { --bg:#0b1120; --card:#151e32; --border:#263554; --text:#f1f5f9; --muted:#94a3b8; --primary:#2563eb; --green:#10b981; --amber:#f59e0b; --red:#ef4444; --purple:#7c3aed; }
+              * { box-sizing:border-box; margin:0; padding:0; font-family:sans-serif; }
+              body { background:var(--bg); color:var(--text); padding:12px; }
+              .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px; margin-bottom:10px; }
+              .title { font-size:16px; font-weight:800; color:#fff; margin-bottom:4px; }
+              .status-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:99px; font-size:12px; background:#1e293b; border:1px solid var(--border); margin:6px 0; }
+              .dot { width:9px; height:9px; border-radius:50%; background:var(--red); }
+              .dot.connected { background:var(--green); box-shadow:0 0 8px var(--green); }
+              .btn-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+              button { border:none; border-radius:10px; padding:11px 10px; font-size:13px; font-weight:700; color:#fff; cursor:pointer; }
+              button:active { opacity:0.75; }
+              .btn-bt { background:var(--primary); grid-column:span 2; font-size:14px; }
+              .btn-green { background:var(--green); }
+              .btn-amber { background:#d97706; }
+              .btn-red { background:var(--red); }
+              .btn-purple { background:var(--purple); }
+              .mac-row { display:flex; gap:6px; margin-top:8px; direction:ltr; }
+              .mac-input { flex:1; background:#0f172a; border:1px solid var(--border); color:#fff; padding:9px; border-radius:8px; font-family:monospace; font-size:13px; }
+              .device-list { margin-top:8px; background:#0f172a; border:1px solid var(--border); border-radius:10px; padding:6px; display:none; }
+              .device-item { padding:10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; direction:ltr; font-size:13px; color:#38bdf8; font-weight:700; }
+              .tabs { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:10px; }
+              .tab-btn { background:var(--card); border:1px solid var(--border); color:var(--muted); padding:9px; border-radius:10px; font-size:12px; }
+              .tab-btn.active { border-color:var(--primary); color:#fff; background:#172554; }
+              .section { display:none; }
+              .section.active { display:block; }
+              .gauge-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+              .gauge-box { background:#0f172a; border:1px solid var(--border); border-radius:10px; padding:10px; text-align:center; }
+              .gauge-val { font-size:24px; font-weight:800; font-family:monospace; margin-top:4px; }
+              .terminal { background:#050811; border:1px solid var(--border); border-radius:10px; padding:10px; font-family:monospace; font-size:12px; height:160px; overflow-y:auto; color:#38bdf8; direction:ltr; text-align:left; white-space:pre-wrap; margin-top:8px; }
+              .dtc-item { background:#2a1215; border:1px solid var(--red); border-radius:8px; padding:9px; margin-top:6px; font-size:12px; }
+            </style>
+            <script src="cordova.js"></script>
+          </head>
+          <body>
+            <div class="card">
+              <div class="title">PSA / PEUGEOT 207 MASTER (V2)</div>
+              <div class="status-pill">
+                <span id="statusDot" class="dot"></span>
+                <span id="statusText">بانتظار الاتصال بقطعة OBDII...</span>
+              </div>
+              <div class="btn-row">
+                <button class="btn-bt" onclick="requestPermsAndList()">🔍 1. عرض أجهزة البلوتوث المقترنة والاتصال</button>
+              </div>
+              <div id="deviceList" class="device-list"></div>
+              <div class="mac-row">
+                <input id="macInput" class="mac-input" type="text" placeholder="MAC: 00:1D:A5:XX:XX:XX" />
+                <button class="btn-green" onclick="connectDirectMAC()">اتصال مباشر</button>
+              </div>
+            </div>
+
+            <div class="tabs">
+              <button class="tab-btn active" onclick="switchTab('t-live', this)">العدادات الحية</button>
+              <button class="tab-btn" onclick="switchTab('t-dtc', this)">فحص ومسح الأعطال</button>
+              <button class="tab-btn" onclick="switchTab('t-bsi', this)">علبة BSI (3 & 8)</button>
+            </div>
+
+            <div id="t-live" class="section active">
+              <div class="card">
+                <div class="gauge-grid">
+                  <div class="gauge-box">
+                    <div style="font-size:11px;color:var(--muted)">دورات المحرك (010C)</div>
+                    <div id="rpmVal" class="gauge-val" style="color:var(--amber)">0 RPM</div>
+                  </div>
+                  <div class="gauge-box">
+                    <div style="font-size:11px;color:var(--muted)">حرارة المحرك (0105)</div>
+                    <div id="tempVal" class="gauge-val" style="color:#38bdf8">-- °C</div>
+                  </div>
+                  <div class="gauge-box">
+                    <div style="font-size:11px;color:var(--muted)">فولتاج البطارية (ATRV)</div>
+                    <div id="voltVal" class="gauge-val" style="color:var(--green)">-- V</div>
+                  </div>
+                  <div class="gauge-box">
+                    <div style="font-size:11px;color:var(--muted)">السرعة (010D)</div>
+                    <div id="spdVal" class="gauge-val" style="color:#fff">0 km/h</div>
+                  </div>
+                </div>
+                <div class="btn-row">
+                  <button class="btn-green" onclick="readOnce()">🔄 قراءة الحساسات الآن</button>
+                  <button id="pollBtn" class="btn-purple" onclick="togglePoll()">▶️ تحديث تلقائي مستمر</button>
+                  <button class="btn-amber" style="grid-column:span 2" onclick="sendCmd('ATSP 0')">⚡ تهيئة كمبيوتر المحرك (ATSP 0)</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="t-dtc" class="section">
+              <div class="card">
+                <div class="btn-row">
+                  <button class="btn-bt" style="grid-column:span 1" onclick="sendCmd('03')">🔍 الأعطال المسجلة (03)</button>
+                  <button class="btn-amber" onclick="sendCmd('07')">⏳ الأعطال المعلقة (07)</button>
+                  <button class="btn-red" style="grid-column:span 2" onclick="sendCmd('04')">🗑️ مسح الأعطال وإطفاء Check (04)</button>
+                </div>
+                <div id="dtcBox" style="margin-top:10px;font-size:12px;color:var(--muted)">اضغط على فحص الأعطال (03) أو (07) لعرض النتيجة.</div>
+              </div>
+            </div>
+
+            <div id="t-bsi" class="section">
+              <div class="card">
+                <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">بعد توصيل القطبين 3 و 8 بعلبة الـ BSI، اضغط على تهيئة سرعة 125kbps:</div>
+                <div class="btn-row">
+                  <button class="btn-amber" onclick="initBSI()">⚙️ تهيئة سرعة BSI (125k)</button>
+                  <button class="btn-green" onclick="sendCmd('ATSP 0')">🔙 العودة للمحرك (ATSP 0)</button>
+                  <button class="btn-purple" onclick="sendCmd('ATI')">🔍 فحص الشريحة (ATI)</button>
+                  <button class="btn-purple" onclick="sendCmd('ATPPS')">📊 جدول السرعات (ATPPS)</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:12px;font-weight:700;">شاشة الأوامر المباشرة (Terminal)</span>
+                <button onclick="document.getElementById('termLog').textContent=''" style="background:#334155;padding:4px 8px;font-size:11px;">مسح</button>
+              </div>
+              <div id="termLog" class="terminal">التطبيق جاهز...\n</div>
+              <div class="mac-row">
+                <input id="cmdInp" class="mac-input" type="text" placeholder="أدخل أمر مثل 03 أو 07 أو 0105..." />
+                <button class="btn-bt" style="width:auto;padding:0 16px;" onclick="sendManual()">إرسال</button>
+              </div>
+            </div>
+
+          <script>
+            const PSA_DB = {
+              "P0135": "عطل سخان حساس الأكسجين العلوي (افحص فيوز F15/F5 في علبة BSM أو الفيشة)",
+              "P0141": "عطل سخان حساس الأكسجين السفلي (مشترك في فيوز علبة BSM)",
+              "P0134": "توقف إشارة حساس الأكسجين العلوي (بسبب الغاز GPL)"
+            };
+            let pollTimer = null;
+            let step = 0;
+
+            function log(msg) {
+              const el = document.getElementById("termLog");
+              el.textContent += msg + "\n";
+              el.scrollTop = el.scrollHeight;
+            }
+
+            function setStat(ok, txt) {
+              document.getElementById("statusDot").className = ok ? "dot connected" : "dot";
+              document.getElementById("statusText").textContent = txt;
+            }
+
+            function switchTab(id, btn) {
+              document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+              document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+              document.getElementById(id).classList.add("active");
+              btn.classList.add("active");
+            }
+
+            document.addEventListener("deviceready", function() {
+              log("✅ نظام Cordova جاهز على الهاتف.");
+              const savedMac = localStorage.getItem("obd_mac");
+              if (savedMac) document.getElementById("macInput").value = savedMac;
+            }, false);
+
+            function requestPermsAndList() {
+              if (!window.bluetoothSerial) {
+                log("❌ مكتبة bluetoothSerial غير محملة بعد.");
+                return;
+              }
+              if (window.cordova && cordova.plugins && cordova.plugins.permissions) {
+                const p = cordova.plugins.permissions;
+                p.requestPermissions([p.BLUETOOTH_CONNECT, p.BLUETOOTH_SCAN, p.ACCESS_FINE_LOCATION], function() {
+                  listPairedDevices();
+                }, function() {
+                  listPairedDevices();
+                });
+              } else {
+                listPairedDevices();
+              }
+            }
+
+            function listPairedDevices() {
+              log("جاري قراءة قائمة البلوتوث من الهاتف...");
+              window.bluetoothSerial.list(function(devices) {
+                const box = document.getElementById("deviceList");
+                box.innerHTML = "";
+                box.style.display = "block";
+                if (!devices || devices.length === 0) {
+                  log("⚠️ القائمة فارغة. تأكد من تشغيل البلوتوث أو اكتب الـ MAC يدوياً.");
+                  return;
+                }
+                devices.forEach(d => {
+                  log("وجد جهاز: " + d.name + " [" + d.address + "]");
+                  const row = document.createElement("div");
+                  row.className = "device-item";
+                  row.innerHTML = "<span>" + (d.name || "Unknown") + "</span><span>" + d.address + "</span>";
+                  row.onclick = function() {
+                    document.getElementById("macInput").value = d.address;
+                    box.style.display = "none";
+                    connectToAddress(d.address, d.name);
+                  };
+                  box.appendChild(row);
+                });
+              }, function(err) {
+                log("❌ خطأ قراءة القائمة: " + JSON.stringify(err));
+              });
+            }
+
+            function connectDirectMAC() {
+              const mac = document.getElementById("macInput").value.trim();
+              if (!mac) {
+                alert("اكتب عنوان MAC أولاً أو اضغط الزر الأزرق لعرض الأجهزة المقترنة");
+                return;
+              }
+              connectToAddress(mac, "OBDII");
+            }
+
+            function connectToAddress(mac, name) {
+              localStorage.setItem("obd_mac", mac);
+              setStat(false, "جاري الاتصال بـ " + mac + "...");
+              log("محاولة الاتصال المباشر (Insecure SPP) بـ " + mac + "...");
+
+              window.bluetoothSerial.connectInsecure(mac, function() {
+                onConnectedSuccess(name, mac);
+              }, function(err1) {
+                log("محاولة الاتصال القياسي...");
+                window.bluetoothSerial.connect(mac, function() {
+                  onConnectedSuccess(name, mac);
+                }, function(err2) {
+                  setStat(false, "فشل الاتصال - تأكد من فصل تطبيق Terminal");
+                  log("❌ فشل الاتصال: " + JSON.stringify(err2) + "\nتأكد من إغلاق تطبيق Serial Bluetooth Terminal أولاً لأن القطعة تقبل تطبيقاً واحداً فقط!");
+                });
+              });
+            }
+
+            function onConnectedSuccess(name, mac) {
+              setStat(true, "متصل بنجاح: " + name + " (" + mac + ")");
+              log("✅ تم الاتصال بقطعة ELM327 بنجاح!");
+              window.bluetoothSerial.subscribe(">", function(data) {
+                parseELM(data);
+              }, function(e) { log("Sub Err: " + e); });
+              setTimeout(() => sendCmd("ATSP 0"), 400);
+              setTimeout(() => sendCmd("ATRV"), 1000);
+            }
+
+            function sendCmd(cmd) {
+              const c = cmd.trim().toUpperCase();
+              log("> " + c);
+              if (window.bluetoothSerial) {
+                window.bluetoothSerial.write(c + "\r", function(){}, function(e){ log("Write Err: " + e); });
+              }
+            }
+
+            function sendManual() {
+              const inp = document.getElementById("cmdInp");
+              if (inp.value.trim()) {
+                sendCmd(inp.value.trim());
+                inp.value = "";
+              }
+            }
+
+            function parseELM(raw) {
+              const clean = raw.replace(/\r/g, " ").replace(/\n/g, " ").replace(/>/g, "").trim();
+              log(clean);
+
+              const vMatch = clean.match(/(\d{1,2}\.\d)V/i);
+              if (vMatch) document.getElementById("voltVal").textContent = vMatch[1] + " V";
+
+              const i05 = clean.indexOf("41 05");
+              if (i05 !== -1) {
+                const p = clean.substring(i05).split(/\s+/);
+                if (p.length >= 3) document.getElementById("tempVal").textContent = (parseInt(p[2], 16) - 40) + " °C";
+              }
+
+              const i0C = clean.indexOf("41 0C");
+              if (i0C !== -1) {
+                const p = clean.substring(i0C).split(/\s+/);
+                if (p.length >= 4) {
+                  const rpm = Math.round(((parseInt(p[2], 16) * 256) + parseInt(p[3], 16)) / 4);
+                  document.getElementById("rpmVal").textContent = rpm + " RPM";
+                }
+              }
+
+              const i0D = clean.indexOf("41 0D");
+              if (i0D !== -1) {
+                const p = clean.substring(i0D).split(/\s+/);
+                if (p.length >= 3) document.getElementById("spdVal").textContent = parseInt(p[2], 16) + " km/h";
+              }
+
+              if (clean.includes("43 ") || clean.includes("47 ")) {
+                decodeDTCs(clean);
+              }
+              if (clean.includes("44")) {
+                document.getElementById("dtcBox").innerHTML = "<b style='color:#10b981'>✅ تم مسح الأعطال بنجاح (44)!</b>";
+              }
+            }
+
+            function decodeDTCs(str) {
+              const box = document.getElementById("dtcBox");
+              const tokens = str.split(/\s+/).filter(t => /^[0-9A-F]{2}$/i.test(t)).map(t => t.toUpperCase());
+              const sIdx = tokens.findIndex(b => b === "43" || b === "47");
+              if (sIdx === -1) return;
+              const count = parseInt(tokens[sIdx + 1] || "00", 16);
+              if (count === 0) {
+                box.innerHTML = "<b style='color:#10b981'>✅ لا توجد أعطال مسجلة (00).</b>";
+                return;
+              }
+              let codes = [];
+              for (let i = sIdx + 2; i + 1 < tokens.length; i += 2) {
+                const b1 = tokens[i], b2 = tokens[i+1];
+                if (b1 === "00" && b2 === "00") continue;
+                if (b1 === "FF" && b2 === "FF") continue;
+                const c = "P" + b1[0] + b1[1] + b2;
+                if (!codes.includes(c)) codes.push(c);
+              }
+              box.innerHTML = codes.map(c => `<div class="dtc-item"><b>${c}</b>: ${PSA_DB[c] || 'عطل مسجل في المحرك'}</div>`).join("");
+            }
+
+            function readOnce() {
+              sendCmd("ATRV");
+              setTimeout(() => sendCmd("0105"), 350);
+              setTimeout(() => sendCmd("010C"), 700);
+            }
+
+            function togglePoll() {
+              const b = document.getElementById("pollBtn");
+              if (pollTimer) {
+                clearInterval(pollTimer); pollTimer = null;
+                b.textContent = "▶️ تحديث تلقائي مستمر";
+              } else {
+                b.textContent = "⏹️ إيقاف التحديث";
+                const list = ["010C", "0105", "ATRV", "010D"];
+                pollTimer = setInterval(() => { sendCmd(list[step % list.length]); step++; }, 650);
+              }
+            }
+
+            function initBSI() {
+              sendCmd("ATPB 81 04");
+              setTimeout(() => sendCmd("ATSP B"), 400);
+            }
+          </script>
+          </body>
+          </html>
+          EOF
+
           cordova platform add android@12.0.1
           cordova plugin add cordova-plugin-bluetooth-serial
           cordova plugin add cordova-plugin-android-permissions
@@ -49,5 +408,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Peugeot-Master-APK
+          name: Peugeot-Master-APK-V2
           path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
